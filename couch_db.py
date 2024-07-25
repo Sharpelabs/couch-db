@@ -16,6 +16,9 @@ class BaseDB:
     def retrieve(self, key):
         return self.db_class.retrieve(key)
 
+    def delete_doc(self, key):
+        return self.db_class.delete_doc(key)
+
     def add_one(self, key, data, sort_key, is_sort=False, desc=False):
         self.db_class.add_one(key, data, sort_key, is_sort, desc)
     
@@ -44,7 +47,10 @@ class CouchDB:
             db = self.client.create(db_name)
         ex_doc = db.get(doc_id)
         if ex_doc:
-            db.save({"_id": doc_id, "_rev": ex_doc["_rev"], "data": data})
+            try:
+                db.save({"_id": doc_id, "_rev": ex_doc["_rev"], "data": data})
+            except couchdb.http.ResourceConflict:
+                print("Could not update. Document update conflict.")
         else:
             db.save({"_id": doc_id, "data": data})
     
@@ -55,6 +61,18 @@ class CouchDB:
         db = self.client[db_name]
         db_data = db.get(doc_id, default={"data": []})
         return db_data["data"]
+
+    def delete_doc(self, key):
+        db_name, doc_id = key.split("/")[0], key.split("/")[1]
+        if db_name not in self.client:
+            return False
+        db = self.client[db_name]
+        try:
+            doc = db[doc_id]
+            db.delete(doc)
+            return True
+        except KeyError:
+            return False
 
     def add_one(self, key, data, sort_key, is_sort=False, desc=False):
         db_data = self.retrieve(key)
